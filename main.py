@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Dict, List, Optional
+from pathlib import Path
 import asyncio
 import json
 import random
@@ -247,6 +248,11 @@ async def tick(world: WorldState):
 # ============== FASTAPI APP ==============
 
 app = FastAPI(title="MudColony API")
+
+# Mount static files
+from pathlib import Path
+static_path = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_path), html=True), name="static")
 
 # Global world state
 world_state: WorldState = WorldState()

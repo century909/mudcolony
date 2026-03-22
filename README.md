@@ -91,11 +91,118 @@ El usuario puede:
 
 ## MVP Features
 
-1. [ ] Grid 20x20 con biomas básicos
-2. [ ] 5 agentes con needs simples
-3. [ ] Tick system cada 30 segundos
-4. [ ] Comandos básicos: explore, gather, rest
-5. [ ] Web UI para ver el mapa
+1. [x] Grid 20x20 con biomas básicos
+2. [x] 5 agentes con needs simples
+3. [x] Tick system (cada 5 segundos via WebSocket)
+4. [x] Comandos básicos: explore, gather, rest
+5. [x] Web UI para ver el mapa
+6. [ ] Integración LLM para decisiones de agentes
+
+---
+
+## 🚧 TODO: Integración LLM
+
+Actualmente los agentes usan **decisión hardcodeada** (`if/else` + `random`).
+
+### Lo que falta:
+
+#### 1. Configurar API Key
+```python
+# main.py - agregar al inicio
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    api_key=os.getenv("MUDCOLONY_API_KEY"),  # o hardcodear
+    base_url="https://integrate.api.nvidia.com/v1"  # para GLM5
+)
+```
+
+#### 2. Modificar `decide_action()` para usar LLM
+```python
+def decide_action_with_llm(agent: Agent, world: WorldState) -> Action:
+    """Decide action using LLM"""
+    
+    # Build context
+    cell_key = f"{agent.position.x},{agent.position.y}"
+    cell = world.cells.get(cell_key)
+    
+    prompt = f"""You are {agent.name}, an autonomous agent in a text-based world.
+
+Current state:
+- Position: ({agent.position.x}, {agent.position.y})
+- Biome: {cell.biome.value if cell else 'unknown'}
+- Available resources: {list(cell.resources.keys()) if cell else []}
+- Inventory: {agent.inventory}
+- Needs: hunger={agent.needs.hunger:.0f}, energy={agent.needs.energy:.0f}, health={agent.needs.health:.0f}, social={agent.needs.social:.0f}
+- Personality: {agent.personality}
+
+Available actions: explore, gather, rest, socialize, craft, build, trade
+
+Decide ONE action to take. Reply with ONLY the action name.
+Action:"""
+
+    response = client.chat.completions.create(
+        model="z-ai/glm5",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=10,
+        temperature=0.7
+    )
+    
+    action_str = response.choices[0].message.content.strip().lower()
+    
+    # Map response to Action enum
+    action_map = {
+        "explore": Action.EXPLORE,
+        "gather": Action.GATHER,
+        "rest": Action.REST,
+        "socialize": Action.SOCIALIZE,
+        "craft": Action.CRAFT,
+        "build": Action.BUILD,
+        "trade": Action.TRADE,
+    }
+    
+    return action_map.get(action_str, Action.EXPLORE)  # fallback
+```
+
+#### 3. Variable de entorno
+```bash
+# Crear archivo .env
+echo "MUDCOLONY_API_KEY=nvapi-xxx" > .env
+```
+
+#### 4. Agregar python-dotenv
+```bash
+pip install python-dotenv
+```
+
+#### 5. Cargar .env al inicio
+```python
+# main.py - al principio
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+#### 6. Toggle entre modo hardcodeado y LLM
+```python
+USE_LLM = os.getenv("USE_LLM", "false").lower() == "true"
+
+# En tick():
+if USE_LLM:
+    action = decide_action_with_llm(agent, world)
+else:
+    action = decide_action(agent, world)
+```
+
+---
+
+## Costos estimados (GLM5 en NVIDIA NIM)
+
+- Input: ~200 tokens por decisión
+- Output: ~10 tokens por decisión
+- Por tick (5 agentes): ~1050 tokens
+- Por hora (720 ticks): ~756,000 tokens
+- Costo: NVIDIA NIM es gratis con API key ✅
 
 ---
 
