@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MudColony - Observer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            display: flex;
+            height: 100vh;
+        }
+        #sidebar {
+            width: 300px;
+            background: #111;
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+        }
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+        h1 { color: #00ff00; margin-bottom: 10px; }
+        h2 { color: #88ff88; margin: 20px 0 10px; font-size: 14px; }
+        #grid-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: auto;
+        }
+        #grid {
+            display: grid;
+            gap: 1px;
+            background: #222;
+            border: 1px solid #333;
+        }
+        .cell {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            position: relative;
+        }
+        .cell:hover { outline: 2px solid #fff; }
+        .forest { background: #1a4d1a; }
+        .desert { background: #b87333; }
+        .water { background: #1a4d8c; }
+        .mountain { background: #666; }
+        .plains { background: #3d5c3d; }
+        .agent {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #ff0;
+            border-radius: 50%;
+            border: 1px solid #000;
+            font-size: 0;
+            z-index: 10;
+        }
+        .agent-selector {
+            padding: 10px;
+            margin: 5px 0;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            cursor: pointer;
+        }
+        .agent-selector:hover { background: #2a2a2a; }
+        .agent-selector.selected { border-color: #00ff00; }
+        .stats { font-size: 12px; color: #888; margin-top: 5px; }
+        .need-bar {
+            height: 4px;
+            background: #333;
+            margin: 2px 0;
+        }
+        .need-fill {
+            height: 100%;
+            transition: width 0.3s;
+        }
+        .hunger .need-fill { background: #ff6b6b; }
+        .energy .need-fill { background: #4ecdc4; }
+        .health .need-fill { background: #45b7d1; }
+        .social .need-fill { background: #f9ca24; }
+        #controls {
+            padding: 10px;
+            background: #1a1a1a;
+            margin-top: 10px;
+            border: 1px solid #333;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            margin: 5px;
+            font-family: inherit;
+        }
+        button:hover { background: #88ff88; }
+        button.stop { background: #ff6b6b; }
+        #tick-display {
+            font-size: 24px;
+            color: #00ff00;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .legend {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+            font-size: 11px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h1>🐜 MudColony</h1>
+        <div id="tick-display">Tick: 0</div>
+        
+        <div id="controls">
+            <button id="start-btn">▶ Start</button>
+            <button id="tick-btn" class="stop">⏭ Tick</button>
+            <button id="spawn-btn">+ Agent</button>
+        </div>
+        
+        <h2>Agents</h2>
+        <div id="agent-list"></div>
+        
+        <div class="legend">
+            <div class="legend-item"><div class="legend-color forest"></div>Forest</div>
+            <div class="legend-item"><div class="legend-color desert"></div>Desert</div>
+            <div class="legend-item"><div class="legend-color water"></div>Water</div>
+            <div class="legend-item"><div class="legend-color mountain"></div>Mountain</div>
+            <div class="legend-item"><div class="legend-color plains"></div>Plains</div>
+        </div>
+    </div>
+    
+    <div id="main">
+        <div id="grid-container">
+            <div id="grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let worldSize = 20;
+        let agents = [];
+        let selectedAgent = null;
+        let cells = {};
+        let running = false;
+
+        function connect() {
+            ws = new WebSocket('ws://localhost:5002/ws');
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'state') {
+                    worldSize = data.world_size;
+                    agents = data.agents;
+                    updateDisplay();
+                }
+            };
+            
+            ws.onclose = () => {
+                setTimeout(connect, 1000);
+            };
+        }
+
+        function updateDisplay() {
+            document.getElementById('tick-display').textContent = `Tick: ${agents[0]?.tick || 0}`;
+            renderGrid();
+            renderAgentList();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.style.gridTemplateColumns = `repeat(${worldSize}, 20px)`;
+            grid.innerHTML = '';
+
+            for (let y = 0; y < worldSize; y++) {
+                for (let x = 0; x < worldSize; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell plains'; // Default
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    grid.appendChild(cell);
+                }
+            }
+
+            // Render agents
+            agents.forEach(agent => {
+                const cellIndex = agent.position.y * worldSize + agent.position.x;
+                const cellEl = grid.children[cellIndex];
+                if (cellEl) {
+                    const agentEl = document.createElement('div');
+                    agentEl.className = 'agent';
+                    agentEl.title = `${agent.name}\nHunger: ${Math.round(agent.needs.hunger)}\nEnergy: ${Math.round(agent.needs.energy)}`;
+                    cellEl.appendChild(agentEl);
+                }
+            });
+        }
+
+        function renderAgentList() {
+            const list = document.getElementById('agent-list');
+            list.innerHTML = agents.map(agent => `
+                <div class="agent-selector ${selectedAgent === agent.id ? 'selected' : ''}" onclick="selectAgent('${agent.id}')">
+                    <strong>${agent.name}</strong>
+                    <div class="stats">${agent.personality} | ${agent.current_action || 'idle'}</div>
+                    <div class="need-bar hunger"><div class="need-fill" style="width: ${agent.needs.hunger}%"></div></div>
+                    <div class="need-bar energy"><div class="need-fill" style="width: ${agent.needs.energy}%"></div></div>
+                    <div class="need-bar health"><div class="need-fill" style="width: ${agent.needs.health}%"></div></div>
+                    <div class="need-bar social"><div class="need-fill" style="width: ${agent.needs.social}%"></div></div>
+                </div>
+            `).join('');
+        }
+
+        function selectAgent(id) {
+            selectedAgent = id;
+            renderAgentList();
+        }
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            running = !running;
+            ws.send(JSON.stringify({ type: running ? 'start' : 'stop' }));
+            document.getElementById('start-btn').textContent = running ? '⏸ Stop' : '▶ Start';
+        });
+
+        document.getElementById('tick-btn').addEventListener('click', () => {
+            ws.send(JSON.stringify({ type: 'tick' }));
+        });
+
+        document.getElementById('spawn-btn').addEventListener('click', () => {
+            fetch('/spawn', { method: 'POST' }).then(() => ws.send(JSON.stringify({ type: 'tick' })));
+        });
+
+        connect();
+    </script>
+</body>
+</html>
