@@ -1,0 +1,89 @@
+{
+  "world": {
+    "size": { "width": 50, "height": 50 },
+    "biomes": ["forest", "desert", "water", "mountain", "plains"],
+    "resources": {
+      "forest": ["wood", "berries", "mushrooms"],
+      "desert": ["cactus", "sand", "stone"],
+      "water": ["fish", "clay"],
+      "mountain": ["stone", "iron", "gold"],
+      "plains": ["wheat", "wool", "leather"]
+    }
+  },
+  "agent": {
+    "needs": {
+      "hunger": { "min": 0, "max": 100, "decay_rate": 1 },
+      "energy": { "min": 0, "max": 100, "decay_rate": 0.5 },
+      "health": { "min": 0, "max": 100, "decay_rate": 0 },
+      "social": { "min": 0, "max": 100, "decay_rate": 0.3 }
+    },
+    "inventory": {
+      "max_slots": 10,
+      "max_weight": 50
+    },
+    "memory": {
+      "max_events": 100,
+      "max_conversations": 50
+    },
+    "personality_traits": [
+      "curious",
+      "social",
+      "hardworking",
+      "cautious",
+      "adventurous",
+      "greedy",
+      "generous",
+      "leader",
+      "follower"
+    ],
+    "skills": {
+      "gathering": { "level": 1, "xp": 0 },
+      "building": { "level": 1, "xp": 0 },
+      "crafting": { "level": 1, "xp": 0 },
+      "hunting": { "level": 1, "xp": 0 },
+      "trading": { "level": 1, "xp": 0 }
+    }
+  },
+  "actions": {
+    "explore": {
+      "energy_cost": 5,
+      "range": 1,
+      "discovers": ["new_cells", "resources", "other_agents"]
+    },
+    "gather": {
+      "energy_cost": 3,
+      "yields": "resource_from_biome",
+      "skill": "gathering"
+    },
+    "build": {
+      "energy_cost": 10,
+      "requires": ["resources"],
+      "creates": "structure",
+      "skill": "building"
+    },
+    "craft": {
+      "energy_cost": 5,
+      "requires": ["resources"],
+      "creates": "tool",
+      "skill": "crafting"
+    },
+    "rest": {
+      "energy_cost": 0,
+      "restores": { "energy": 20, "health": 5 }
+    },
+    "socialize": {
+      "energy_cost": 2,
+      "restores": { "social": 15 },
+      "creates": "memory"
+    },
+    "trade": {
+      "energy_cost": 1,
+      "requires": "other_agent",
+      "skill": "trading"
+    }
+  },
+  "tick": {
+    "interval_seconds": 30,
+    "decay_applied": true
+  }
+}
